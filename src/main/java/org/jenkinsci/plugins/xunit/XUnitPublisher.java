@@ -24,6 +24,21 @@
 
 package org.jenkinsci.plugins.xunit;
 
+import java.io.IOException;
+import java.io.Serializable;
+import java.util.Arrays;
+
+import javax.annotation.CheckForNull;
+
+import org.jenkinsci.lib.dryrun.DryRun;
+import org.jenkinsci.lib.dtkit.descriptor.TestTypeDescriptor;
+import org.jenkinsci.lib.dtkit.type.TestType;
+import org.jenkinsci.plugins.xunit.threshold.FailedThreshold;
+import org.jenkinsci.plugins.xunit.threshold.SkippedThreshold;
+import org.jenkinsci.plugins.xunit.threshold.XUnitThreshold;
+import org.jenkinsci.plugins.xunit.threshold.XUnitThresholdDescriptor;
+import org.kohsuke.stapler.DataBoundConstructor;
+
 import hudson.DescriptorExtensionList;
 import hudson.Extension;
 import hudson.FilePath;
@@ -42,24 +57,12 @@ import hudson.tasks.Recorder;
 import hudson.tasks.junit.JUnitResultArchiver;
 import hudson.tasks.test.TestResultProjectAction;
 import jenkins.tasks.SimpleBuildStep;
-import org.jenkinsci.lib.dryrun.DryRun;
-import org.jenkinsci.lib.dtkit.descriptor.TestTypeDescriptor;
-import org.jenkinsci.lib.dtkit.type.TestType;
-import org.jenkinsci.plugins.xunit.threshold.FailedThreshold;
-import org.jenkinsci.plugins.xunit.threshold.SkippedThreshold;
-import org.jenkinsci.plugins.xunit.threshold.XUnitThreshold;
-import org.jenkinsci.plugins.xunit.threshold.XUnitThresholdDescriptor;
-import org.kohsuke.stapler.DataBoundConstructor;
-
-import java.io.IOException;
-import java.io.Serializable;
 
 /**
  * Class that converting custom reports to Junit reports and records them
  *
  * @author Gregory Boissinot
  */
-@SuppressWarnings({"unchecked", "unused"})
 public class XUnitPublisher extends Recorder implements DryRun, Serializable, SimpleBuildStep {
 
     private TestType[] types;
@@ -67,16 +70,15 @@ public class XUnitPublisher extends Recorder implements DryRun, Serializable, Si
     private int thresholdMode;
     private ExtraConfiguration extraConfiguration;
 
-    public XUnitPublisher(TestType[] types, XUnitThreshold[] thresholds) {
-        this.types = types;
-        this.thresholds = thresholds;
+    public XUnitPublisher(@CheckForNull TestType[] tools, @CheckForNull XUnitThreshold[] thresholds) {
+        this.types = (tools != null ? Arrays.copyOf(tools, tools.length) : new TestType[0]);
+        this.thresholds = (thresholds != null ? Arrays.copyOf(thresholds, thresholds.length) : new XUnitThreshold[0]);
         this.thresholdMode = 1;
     }
 
     @DataBoundConstructor
-    public XUnitPublisher(TestType[] tools, XUnitThreshold[] thresholds, int thresholdMode, String testTimeMargin) {
-        this.types = tools;
-        this.thresholds = thresholds;
+    public XUnitPublisher(@CheckForNull TestType[] tools, @CheckForNull XUnitThreshold[] thresholds, int thresholdMode, @CheckForNull String testTimeMargin) {
+        this(tools, thresholds);
         this.thresholdMode = thresholdMode;
         long longTestTimeMargin = XUnitDefaultValues.TEST_REPORT_TIME_MARGING;
         if (testTimeMargin != null && testTimeMargin.trim().length() != 0) {
@@ -85,14 +87,14 @@ public class XUnitPublisher extends Recorder implements DryRun, Serializable, Si
         this.extraConfiguration = new ExtraConfiguration(longTestTimeMargin);
     }
 
-    /**
+    /*
      * Needed to support Snippet Generator and Workflow properly.
      */
     public TestType[] getTools() {
         return types;
     }
 
-    /**
+    /*
      * Needed to support Snippet Generator and Workflow properly
      */
     public String getTestTimeMargin() {
@@ -129,19 +131,13 @@ public class XUnitPublisher extends Recorder implements DryRun, Serializable, Si
     }
 
     @Override
-    public boolean perform(final AbstractBuild<?, ?> build, Launcher launcher, final BuildListener listener)
-            throws InterruptedException, IOException {
-        perform(build, build.getWorkspace(), launcher, listener);
-        return true;
-    }
-
-    @Override
     public void perform(final Run<?, ?> build, FilePath workspace, Launcher launcher, final TaskListener listener)
             throws InterruptedException, IOException {
         XUnitProcessor xUnitProcessor = new XUnitProcessor(getTypes(), getThresholds(), getThresholdMode(), getExtraConfiguration());
         xUnitProcessor.performXUnit(false, build, workspace, listener);
     }
 
+    @Override
     public boolean performDryRun(AbstractBuild<?, ?> build, Launcher launcher, BuildListener listener)
             throws InterruptedException, IOException {
         try {
@@ -156,12 +152,12 @@ public class XUnitPublisher extends Recorder implements DryRun, Serializable, Si
     }
 
 
+    @Override
     public BuildStepMonitor getRequiredMonitorService() {
         return BuildStepMonitor.NONE;
     }
 
     @Extension
-    @SuppressWarnings("unused")
     public static final class XUnitDescriptorPublisher extends BuildStepDescriptor<Publisher> {
 
         public XUnitDescriptorPublisher() {
@@ -175,7 +171,7 @@ public class XUnitPublisher extends Recorder implements DryRun, Serializable, Si
         }
 
         @Override
-        public boolean isApplicable(Class type) {
+        public boolean isApplicable(@SuppressWarnings("rawtypes") Class<? extends AbstractProject> jobType) {
             return true;
         }
 
