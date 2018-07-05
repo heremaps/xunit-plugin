@@ -130,13 +130,19 @@ public class XUnitProcessor implements Serializable {
         }
     }
 
+    private static final class AbstractModuleLog extends AbstractModule {
+        private final TaskListener listener;
+        AbstractModuleLog(final TaskListener listener) {
+            this.listener = listener;
+        }
+        @Override
+        protected void configure() {
+            bind(TaskListener.class).toInstance(this.listener);
+        }
+    }
+
     private XUnitLog getXUnitLogObject(final TaskListener listener) {
-        return Guice.createInjector(new AbstractModule() {
-            @Override
-            protected void configure() {
-                bind(TaskListener.class).toInstance(listener);
-            }
-        }).getInstance(XUnitLog.class);
+        return Guice.createInjector(new AbstractModuleLog(listener)).getInstance(XUnitLog.class);
     }
 
     private boolean performTests(XUnitLog xUnitLog, Run<?, ?> build, FilePath workspace, TaskListener listener) throws IOException, InterruptedException, StopTestProcessingException {
@@ -193,12 +199,7 @@ public class XUnitProcessor implements Serializable {
     }
 
     private XUnitReportProcessorService getXUnitReportProcessorServiceObject(final TaskListener listener) {
-        return Guice.createInjector(new AbstractModule() {
-            @Override
-            protected void configure() {
-                bind(TaskListener.class).toInstance(listener);
-            }
-        }).getInstance(XUnitReportProcessorService.class);
+        return Guice.createInjector(new AbstractModuleLog(listener)).getInstance(XUnitReportProcessorService.class);
     }
 
     private static class StopTestProcessingException extends Exception {
@@ -214,18 +215,24 @@ public class XUnitProcessor implements Serializable {
         return Util.replaceMacro(newExpandedPattern, build.getEnvironment(listener));
     }
 
+    private static final class AbstractModuleToolInfo extends AbstractModule {
+        private final TaskListener listener;
+        AbstractModuleToolInfo(final TaskListener listener) {
+            this.listener = listener;
+        }
+        @Override
+        protected void configure() {
+            bind(TaskListener.class).toInstance(listener);
+            bind(XUnitLog.class).in(Singleton.class);
+            bind(XUnitValidationService.class).in(Singleton.class);
+            bind(XUnitConversionService.class).in(Singleton.class);
+        }
+    }
+
     private XUnitToolInfo getXUnitToolInfoObject(final TestType tool, final String expandedPattern, final Run<?, ?> build, final FilePath workspace, final TaskListener listener) throws IOException, InterruptedException {
 
         InputMetric inputMetric = tool.getInputMetric();
-        inputMetric = Guice.createInjector(new AbstractModule() {
-            @Override
-            protected void configure() {
-                bind(TaskListener.class).toInstance(listener);
-                bind(XUnitLog.class).in(Singleton.class);
-                bind(XUnitValidationService.class).in(Singleton.class);
-                bind(XUnitConversionService.class).in(Singleton.class);
-            }
-        }).getInstance(inputMetric.getClass());
+        inputMetric = Guice.createInjector(new AbstractModuleToolInfo(listener)).getInstance(inputMetric.getClass());
 
         return new XUnitToolInfo(
                 new FilePath(new File(Jenkins.getActiveInstance().getRootDir(), "userContent")),
@@ -258,18 +265,26 @@ public class XUnitProcessor implements Serializable {
         return customXSLFilePath;
     }
 
+    private static final class AbstractModuleTransformer extends AbstractModule {
+        private final XUnitToolInfo xUnitToolInfo;
+        private final TaskListener listener;
+        AbstractModuleTransformer(final XUnitToolInfo xUnitToolInfo, final TaskListener listener) {
+            this.listener = listener;
+            this.xUnitToolInfo = xUnitToolInfo ;
+        }
+        @Override
+        protected void configure() {
+            bind(TaskListener.class).toInstance(this.listener);
+            bind(XUnitToolInfo.class).toInstance(this.xUnitToolInfo);
+            bind(XUnitValidationService.class).in(Singleton.class);
+            bind(XUnitConversionService.class).in(Singleton.class);
+            bind(XUnitLog.class).in(Singleton.class);
+            bind(XUnitReportProcessorService.class).in(Singleton.class);
+        }
+    }
+
     private XUnitTransformer getXUnitTransformerObject(final XUnitToolInfo xUnitToolInfo, final TaskListener listener) {
-        return Guice.createInjector(new AbstractModule() {
-            @Override
-            protected void configure() {
-                bind(TaskListener.class).toInstance(listener);
-                bind(XUnitToolInfo.class).toInstance(xUnitToolInfo);
-                bind(XUnitValidationService.class).in(Singleton.class);
-                bind(XUnitConversionService.class).in(Singleton.class);
-                bind(XUnitLog.class).in(Singleton.class);
-                bind(XUnitReportProcessorService.class).in(Singleton.class);
-            }
-        }).getInstance(XUnitTransformer.class);
+        return Guice.createInjector(new AbstractModuleTransformer(xUnitToolInfo, listener)).getInstance(XUnitTransformer.class);
     }
 
     private TestResultAction getTestResultAction(Run<?, ?> build) {
